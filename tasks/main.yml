@@ -1,0 +1,62 @@
+---
+- name: Get info of original folder
+  stat:
+    path: "{{ docker_source_folder }}"
+  register: orig_folder_status
+
+- name: Sanity Check original folder
+  fail:
+    msg: "Orginal folder does'nt exist"
+  when: orig_folder_status.stat.exists == false or orig_folder_status.stat.isdir == false or orig_folder_status.stat.islnk == true
+
+- name: Get info of destination folder"
+  stat: 
+    path: "{{ docker_destination_folder }}"
+  register: dest_folder_status
+
+- name: destination folder exist
+  debug:
+    msg: "Destination folder already exist"
+  when: dest_folder_status.stat.exists == true
+
+- name: Move docker filesystem
+  block:
+
+    - name: "Install rsync"
+      package:
+        name: rsync
+        state: present
+
+    - name: "Create destination folder"
+      file:
+        name: "{{ docker_destination_folder }}"
+        state: directory
+
+    - name: "Stop docker service"
+      systemd:
+        name: docker
+        state: stopped
+
+    - name: Synchronization orginal to destination folder
+      shell: >-
+        rsync
+        -aqxP
+        {{ docker_source_folder }}/
+        {{ docker_destination_folder }}
+
+    - name: "Change service configuration"
+      lineinfile:
+        path: "/lib/systemd/system/docker.service"
+        regexp: '^ExecStart=/usr/bin/dockerd'
+        line: 'ExecStart=/usr/bin/dockerd -g {{ docker_destination_folder }} -H fd://'
+
+    - name: "Reload docker service configuration"
+      systemd:
+        daemon_reload: yes
+
+    - name: "Start docker service"
+      systemd:
+        name: docker
+        state: started
+
+  when: dest_folder_status.stat.exists == false

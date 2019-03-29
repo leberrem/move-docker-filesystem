@@ -1,0 +1,10 @@
+---
+- hosts: localhost
+  remote_user: root
+  tasks:
+    - name: Move docker filesystem
+      include_role:
+        name: move-docker-filesystem
+      vars:
+        from_folder: "/var/lib/docker"
+        to_folder: "/data/docker"
